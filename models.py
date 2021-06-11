@@ -1,30 +1,30 @@
-
 import torch
-import numpy as np
-import torch.nn.functional as F
 from torch.nn.utils import weight_norm
+
+import utils
+
+
+class LanguageModel(object):
+    def predict_all(self, some_text):
+        raise NotImplementedError('Abstract function LanguageModel.predict_all')
+
+    def predict_next(self, some_text):
+        return self.predict_all(some_text)[:, -1]
+
 
 class Chomp(torch.nn.Module):
     def __init__(self, chomp_size):
-            super().__init__()
-            self.chomp_size = chomp_size
+        super().__init__()
+        self.chomp_size = chomp_size
 
     def forward(self, x):
-            return x[:, :, :-self.chomp_size].contiguous()
+        return x[:, :, :-self.chomp_size].contiguous()
 
-class TCN(torch.nn.Module):
+
+class TCN(torch.nn.Module, LanguageModel):
     class CausalConv1dBlock(torch.nn.Module):
         def __init__(self, c, l, kernel_size, total_dilation, dropout=0.2):
             super().__init__()
-            """
-            Your code here.
-            Implement a Causal convolution followed by a non-linearity (e.g. ReLU).
-            Optionally, repeat this pattern a few times and add in a residual block
-            :param in_channels: Conv1d parameter
-            :param out_channels: Conv1d parameter
-            :param kernel_size: Conv1d parameter
-            :param dilation: Conv1d parameter
-            """
             padding = (kernel_size - 1) * total_dilation
             # self.pad1 = torch.nn.ConstantPad1d(((kernel_size-1) * total_dilation, 0), 0)
             self.conv1 = weight_norm(torch.nn.Conv1d(c, l, kernel_size,
@@ -61,7 +61,6 @@ class TCN(torch.nn.Module):
             self.relu = torch.nn.ReLU()
             self.init_weights()
 
-
         def forward(self, x):
             out = self.net(x)
             res = self.skip(x)
@@ -74,14 +73,8 @@ class TCN(torch.nn.Module):
             self.conv4.weight.data.normal_(0, 0.01)
             self.skip.weight.data.normal_(0, 0.01)
 
-    def __init__(self, num_inputs = 28, num_channels = [8]*10, kernel_size=2, dropout=0.2):
+    def __init__(self, num_inputs=28, num_channels=[8] * 10, kernel_size=2, dropout=0.2):
         super().__init__()
-        """
-        Your code here
-        Hint: Try to use many layers small (channels <=50) layers instead of a few very large ones
-        Hint: The probability of the first character should be a parameter
-        use torch.nn.Parameter to explicitly create it.
-        """
         layers = []
         out_channels = 28
         num_levels = len(num_channels)
@@ -89,8 +82,8 @@ class TCN(torch.nn.Module):
             dilation_size = 2 ** i
             in_channels = num_inputs if i == 0 else num_channels[i - 1]
             out_channels = num_channels[i]
-            layers += [self.CausalConv1dBlock(in_channels, out_channels, kernel_size, dilation=dilation_size,
-                                     padding=(kernel_size - 1) * dilation_size, dropout=dropout)]
+            layers += [self.CausalConv1dBlock(in_channels, out_channels, kernel_size, total_dilation=dilation_size,
+                                            dropout=dropout)]
 
         self.network = torch.nn.Sequential(*layers)
         self.classifier = torch.nn.Conv1d(out_channels, 28, 1)
@@ -98,12 +91,6 @@ class TCN(torch.nn.Module):
         self.first = torch.nn.Parameter(torch.zeros(28, 1), requires_grad=True)
 
     def forward(self, x):
-        """
-        Your code here
-        Return the log likelihood for the next character for prediction for any substring of x
-        @x: torch.Tensor((B, vocab_size, L)) a batch of one-hot encodings
-        @return torch.Tensor((B, vocab_size, L+1)) a batch of log-likelihoods or logits
-        """
         y = x
         val = self.first
         if (x.shape[2] == 0):
@@ -115,3 +102,41 @@ class TCN(torch.nn.Module):
         # print("output ", output)
         prob = self.softmax(output)
         return prob
+
+    def stack_param(self, param, input):
+        stacks = []
+        for i in range(input.shape[0]):
+            stacks.append(param)
+        batch = torch.stack(stacks, dim=0)
+        return batch
+
+    def predict_all(self, some_text):
+        one_hot = utils.one_hot(some_text)
+        model = load_model()
+        forward_output = model(one_hot[None])
+        forward_output = forward_output.view(one_hot.shape[0], one_hot.shape[1] + 1)
+        return forward_output
+
+
+def save_model(model):
+    from os import path
+    return torch.save(model.state_dict(), path.join(path.dirname(path.abspath(__file__)), 'tcn.th'))
+
+
+def load_model():
+    from os import path
+    r = TCN()
+    r.load_state_dict(torch.load(path.join(path.dirname(path.abspath(__file__)), 'tcn.th'), map_location='cpu'))
+    return r
+
+
+if __name__ == '__main__':
+    x = torch.autograd.Variable(torch.randn(28, 50))
+    # model = TCN()
+    x[:, 1] = float('NaN')
+    m = TCN().forward(x[None])
+
+    # x[:, :, :3].data.zero_()  # make the first three elements zero
+    print(x.shape)
+    print(m.shape)
+    print(m[:2])
