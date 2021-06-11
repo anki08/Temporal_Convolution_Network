@@ -26,14 +26,12 @@ class TCN(torch.nn.Module, LanguageModel):
         def __init__(self, c, l, kernel_size, total_dilation, dropout=0.2):
             super().__init__()
             padding = (kernel_size - 1) * total_dilation
-            # self.pad1 = torch.nn.ConstantPad1d(((kernel_size-1) * total_dilation, 0), 0)
             self.conv1 = weight_norm(torch.nn.Conv1d(c, l, kernel_size,
                                                      padding=padding, dilation=total_dilation))
             self.chomp1 = Chomp(padding)
             self.relu1 = torch.nn.ReLU()
             self.dropout1 = torch.nn.Dropout(dropout)
 
-            # self.pad2 = torch.nn.ConstantPad1d(((kernel_size-1) * total_dilation, 0), 0)
             self.conv2 = weight_norm(torch.nn.Conv1d(l, l, kernel_size,
                                                      padding=padding, dilation=total_dilation))
             self.chomp2 = Chomp(padding)
@@ -99,7 +97,6 @@ class TCN(torch.nn.Module, LanguageModel):
         output = self.classifier(self.network(y))
         batch = self.stack_param(val, x)
         output = torch.cat([batch, output], dim=2)
-        # print("output ", output)
         prob = self.softmax(output)
         return prob
 
@@ -132,11 +129,7 @@ def load_model():
 
 if __name__ == '__main__':
     x = torch.autograd.Variable(torch.randn(28, 50))
-    # model = TCN()
+    model = TCN()
     x[:, 1] = float('NaN')
     m = TCN().forward(x[None])
 
-    # x[:, :, :3].data.zero_()  # make the first three elements zero
-    print(x.shape)
-    print(m.shape)
-    print(m[:2])
