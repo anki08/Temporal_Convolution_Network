@@ -3,7 +3,7 @@ import string
 import torch
 
 from . import utils
-from .models import LanguageModel
+from .models import LanguageModel, load_model
 
 
 def log_likelihood(model: LanguageModel, some_text: str):
@@ -118,3 +118,9 @@ def beam_search(model: LanguageModel, beam_size: int, n_results: int = 10, max_l
 
 def sort_tuple(tup):
     return (sorted(tup, key=lambda x: x[1], reverse=True))
+
+if __name__ == '__main__':
+    lm = load_model()
+    for s in beam_search(lm, 100):
+        print(s, float(log_likelihood(lm, s)))
+    print()
