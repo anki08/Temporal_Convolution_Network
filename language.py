@@ -2,8 +2,8 @@ import string
 
 import torch
 
-from . import utils
-from .models import LanguageModel, load_model
+import utils
+from models import LanguageModel, load_model
 
 
 def log_likelihood(model: LanguageModel, some_text: str):
@@ -14,20 +14,6 @@ def log_likelihood(model: LanguageModel, some_text: str):
     out = output[idxs[:, 0], idxs[:, 1]]
     ll = out.sum()
     return ll
-
-
-class TopNHeap:
-
-    def __init__(self, N):
-        self.elements = []
-        self.N = N
-
-    def add(self, e):
-        from heapq import heappush, heapreplace
-        if len(self.elements) < self.N:
-            heappush(self.elements, e)
-        elif self.elements[0] < e:
-            heapreplace(self.elements, e)
 
 
 def beam_search(model: LanguageModel, beam_size: int, n_results: int = 10, max_length: int = 100,
@@ -119,8 +105,19 @@ def beam_search(model: LanguageModel, beam_size: int, n_results: int = 10, max_l
 def sort_tuple(tup):
     return (sorted(tup, key=lambda x: x[1], reverse=True))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
+    parser.add_argument('-m', '--model', choices=['Adjacent', 'Bigram', 'TCN'], default='Adjacent')
+    args = parser.parse_args()
+
     lm = load_model()
+
     for s in beam_search(lm, 100):
-        print(s, float(log_likelihood(lm, s)))
+        print(s)
     print()
+
+    for s in beam_search(lm, 100, average_log_likelihood=True):
+        print(s)
